@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Random String Reader + Metronome (BPM)</title>
+</head>
+<body>
+  <h1>Random String Reader</h1>
+
+  <textarea id="userInput" placeholder="Enter strings, one per line..." rows="10" cols="30"></textarea>
+  <br><br>
+
+  <label>Min Delay (seconds):</label>
+  <input type="number" id="minDelay" value="5" min="1">
+  <br><br>
+
+  <label>Max Delay (seconds):</label>
+  <input type="number" id="maxDelay" value="20" min="1">
+  <br><br>
+
+  <label>
+    <input type="checkbox" id="metronomeToggle"> Enable Metronome
+  </label>
+  <br>
+
+  <label>Metronome BPM:</label>
+  <input type="number" id="metronomeBPM" value="60" min="10">
+  <br><br>
+
+  <button onclick="startReading()">Start Reading</button>
+  <button onclick="startRepeatAll()">Repeat All</button>
+  <button onclick="stopReading()">Stop</button>
+  <button onclick="repeatLast()">Repeat</button>
+
+  <h2>Output:</h2>
+  <div id="output"></div>
+
+  <script>
+    let strings = [];
+    let reading = false;
+    let repeatAllMode = false;
+    let timer = null;
+    let lastString = '';
+    let metronomeTimer = null;
+
+    function getRandomInterval(min, max) {
+      return (Math.floor(Math.random() * (max - min + 1)) + min) * 1000;
+    }
+
+    function speakText(text) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function getRandomString() {
+      if (strings.length === 1) return strings[0];
+
+      let newString = lastString;
+      while (newString === lastString) {
+        const randomIndex = Math.floor(Math.random() * strings.length);
+        newString = strings[randomIndex];
+      }
+      return newString;
+    }
+
+    function readRandomString(minDelay, maxDelay) {
+      if (!reading || strings.length === 0) return;
+
+      const selected = getRandomString();
+      lastString = selected;
+      document.getElementById('output').innerText = selected;
+      speakText(selected);
+
+      if (repeatAllMode) {
+        timer = setTimeout(() => readRandomString(minDelay, maxDelay), getRandomInterval(minDelay, maxDelay));
+      }
+    }
+
+    function startReading() {
+      initStringsAndDelays((minDelay, maxDelay) => {
+        reading = true;
+        repeatAllMode = false;
+        readRandomString(minDelay, maxDelay);
+        if (document.getElementById('metronomeToggle').checked) startMetronome();
+      });
+    }
+
+    function startRepeatAll() {
+      initStringsAndDelays((minDelay, maxDelay) => {
+        reading = true;
+        repeatAllMode = true;
+        readRandomString(minDelay, maxDelay);
+        if (document.getElementById('metronomeToggle').checked) startMetronome();
+      });
+    }
+
+    function initStringsAndDelays(callback) {
+      const input = document.getElementById('userInput').value;
+      strings = input.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+
+      const minDelay = parseInt(document.getElementById('minDelay').value);
+      const maxDelay = parseInt(document.getElementById('maxDelay').value);
+
+      if (strings.length === 0) {
+        alert("Please enter at least one string.");
+        return;
+      }
+
+      if (isNaN(minDelay) || isNaN(maxDelay) || minDelay < 1 || maxDelay < minDelay) {
+        alert("Please enter valid min and max delay values (min ≥ 1, max ≥ min).");
+        return;
+      }
+
+      if (timer) clearTimeout(timer);
+      window.speechSynthesis.cancel();
+      stopMetronome();
+      callback(minDelay, maxDelay);
+    }
+
+    function stopReading() {
+      reading = false;
+      repeatAllMode = false;
+      if (timer) clearTimeout(timer);
+      window.speechSynthesis.cancel();
+      stopMetronome();
+    }
+
+    function repeatLast() {
+      if (lastString) {
+        speakText(lastString);
+      } else {
+        alert("Nothing to repeat yet!");
+      }
+    }
+
+    function startMetronome() {
+      const bpm = parseFloat(document.getElementById('metronomeBPM').value);
+      if (isNaN(bpm) || bpm <= 0) return;
+
+      const interval = 60000 / bpm;
+
+      const playClick = () => {
+        const context = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = context.createOscillator();
+        const gainNode = context.createGain();
+
+        oscillator.type = 'square';
+        oscillator.frequency.setValueAtTime(1000, context.currentTime);
+        gainNode.gain.setValueAtTime(0.1, context.currentTime);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(context.destination);
+        oscillator.start();
+        oscillator.stop(context.currentTime + 0.05);
+      };
+
+      playClick(); // immediate click
+      metronomeTimer = setInterval(playClick, interval);
+    }
+
+    function stopMetronome() {
+      if (metronomeTimer) {
+        clearInterval(metronomeTimer);
+        metronomeTimer = null;
+      }
+    }
+  </script>
+</body>
+</html>
